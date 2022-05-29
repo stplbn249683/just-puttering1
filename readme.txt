@@ -57,7 +57,7 @@ I would point out something that I ran into myself when using this program.
 If a stock split has occurred in the stock since the historical stock quotes
 were first added to the database then all of the historicl stock quotes
 for that ticker symbol probably need to be deleted from the database so
-that the all of the historical stock quotes for that ticker symbol will be
+that all of the historical stock quotes for that ticker symbol will be
 downloaded and added back to the database again.
 
 This can be done very carefully (using ticker symbol NVDA as an example) using
