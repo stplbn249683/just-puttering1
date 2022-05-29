@@ -4,7 +4,7 @@ SQL Server database table described in the repository "just-puttering".
 
 Sometimes I just want to display some stock charts without logging in,
 worrying about getting timed out, or getting distracted by continuous
-adds. So I wrote this Windows desktop application.  I used the free
+ads. So I wrote this Windows desktop application.  I used the free
 version of Visual Studio 2022.
 
 This program makes use of the Skender.Stock.Indicators NuGet package to
@@ -26,7 +26,7 @@ date). I have used a list of check boxes to select what charts to plot.
 Since the panel containing the charts scrolls, I normally just check
 all of the check boxes. However, there is an error if the Chaikin money flow
 chart is selected when all of the volumes are zero and some other charts are 
-meaningless of all of the volumes are zero.
+meaningless if all of the volumes are zero.
 
 The data souce is read in from the text file named "DataSource.ini" located
 in the application directory.  The data source could also be specified
@@ -52,3 +52,17 @@ output.  If I find errors in the program or add additional charts then I
 will update the files and change the "Last modified" date at the top of 
 the file Module1.vb.  I have not included a project file; just the files
 for the input form and the code.
+
+I would point out something that I ran into myself when using this program.
+If a stock split has occurred in the stock since the historical stock quotes
+were first added to the database then all of the historicl stock quotes
+for that ticker symbol probably need to be deleted from the database so
+that the all of the historical stock quotes for that ticker symbol will be
+downloaded and added back to the database again.
+
+This can be done very carefully (using ticker symbol NVDA as an example) using
+a SQL query like the following:
+
+DECLARE @ticker varchar(10) = 'NVDA'
+DELETE FROM market_price
+WHERE        (Ticker = @ticker)
