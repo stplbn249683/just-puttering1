@@ -355,10 +355,9 @@ Module Module1
   End Function
   Sub InitializeDefaults()
     With UserInput
-      .data_source = "Put Your Data Source Name Here"
+      .data_source = "your data source name goes here"
       .ticker = ""
       .num_for_chart = "0"
-      .data_source = "your data source name goes here"
       .num_check_box_indices = 0
     End With
   End Sub

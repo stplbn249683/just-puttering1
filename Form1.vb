@@ -21,8 +21,11 @@ Public Class Form1
     ticker = txtTicker.Text
     num_for_chart = CInt(txtNumPoints.Text)
     num_charts = clbChart.CheckedItems.Count
+    If num_charts <= 0 Or num_for_chart < 2 Then
+      Me.Cursor = Cursors.Default
+      Exit Sub
+    End If
 
-    If num_charts <= 0 Then Exit Sub
     ReDim charts(0 To num_charts - 1)
     For i = 0 To num_charts - 1
       charts(i) = New Chart
@@ -151,7 +154,6 @@ Public Class Form1
   Function UpdateChart%(ticker$, num_for_chart%, data_source$, num_charts%, chart_desc$())
     UpdateChart = -1
     Dim error1%
-    Dim market_price_db$ = "Data Source=" & data_source & ";Initial Catalog=market_data;Integrated Security=True;"
     Dim max_num_points%, i%, num_from_db%
 
     max_num_points = num_for_chart + 720 'add some points so that errors have time to die out
@@ -165,29 +167,27 @@ Public Class Form1
       Exit Function
     End If
 
-    If num_from_db > 10 Then
-      If num_for_chart > num_from_db Then
-        MessageBox.Show(" Not enough points For calculations")
+    If num_from_db <= 10 Or num_for_chart > num_from_db Then
+      MessageBox.Show(" Not enough points For calculations")
+      Exit Function
+    End If
+
+    Panel1.Controls.Clear()
+    ReDim chart_sizes(0 To num_charts - 1)
+    For i = 0 To num_charts - 1
+      Dim chart_size$, chart_name$
+      chart_size = "large"
+      chart_name = "Chart" & i.ToString.Trim
+      error1 = AddChart(chart_name, chart_desc(i), charts(i), num_for_chart, num_from_db, quotes, chart_size)
+      If error1 < 0 Then
+        Panel1.Controls.Clear()
+        MessageBox.Show("Error on chart " & chart_desc(i))
         Exit Function
       End If
-
-      Panel1.Controls.Clear()
-      ReDim chart_sizes(0 To num_charts - 1)
-      For i = 0 To num_charts - 1
-        Dim chart_size$, chart_name$
-        chart_size = "large"
-        chart_name = "Chart" & i.ToString.Trim
-        error1 = AddChart(chart_name, chart_desc(i), charts(i), num_for_chart, num_from_db, quotes, chart_size)
-        If error1 < 0 Then
-          Panel1.Controls.Clear()
-          MessageBox.Show("Error on chart " & chart_desc(i))
-          Exit Function
-        End If
-        chart_sizes(i) = chart_size
+      chart_sizes(i) = chart_size
       Next
 
       SetControlSizes()
-    End If
     UpdateChart = 0
   End Function
 

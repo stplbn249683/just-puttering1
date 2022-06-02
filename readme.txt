@@ -50,8 +50,9 @@ that were added to the exchange very recently).
 I have included a few PNG files in the repository showing screen shots of the
 output.  If I find errors in the program or add additional charts then I
 will update the files and change the "Last modified" date at the top of 
-the file Module1.vb.  I have not included a project file; just the files
-for the input form and the code.
+the file Module1.vb.  I have now included the project file since it can be a
+little difficult to get the form to display correctly without it (as I 
+found out when I tried to do it myself).
 
 I would point out something that I ran into myself when using this program.
 If a stock split has occurred in the stock since the historical stock quotes
@@ -66,3 +67,11 @@ a SQL query like the following:
 DECLARE @ticker varchar(10) = 'NVDA'
 DELETE FROM market_price
 WHERE        (Ticker = @ticker)
+
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
