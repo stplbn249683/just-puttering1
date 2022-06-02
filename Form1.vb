@@ -576,15 +576,17 @@ Public Class Form1
         error1 = ResizeLists(num_for_chart, lstDate, lstMacd, lstSignal, lstHistogram)
         If error1 < 0 Then Exit Function
 
-        Dim days_rising_or_falling%
+        Dim days_rising_or_falling%, days_rising_or_falling1%
         If chart_desc.StartsWith("MACD(12,26,9)") Then
           days_rising_or_falling = DaysRisingOrFalling1(40, lstMacd)
+          days_rising_or_falling1 = DaysRisingOrFalling1(40, lstHistogram)
           title1.Text = "MACD(12,26,9) = " & Format(lstMacd.Last, "0.00") & "   MACD - Signal = " & Format((lstMacd.Last - lstSignal.Last), "0.00") &
-              "  MACD consecutive days rising/falling = " & Format(days_rising_or_falling, "0")
+              "  MACD consecutive days rising/falling = " & Format(days_rising_or_falling, "0") & "  Histogram consecutive days rising/falling = " & Format(days_rising_or_falling1, "0")
         Else
           days_rising_or_falling = DaysRisingOrFalling1(200, lstMacd)
+          days_rising_or_falling1 = DaysRisingOrFalling1(200, lstHistogram)
           title1.Text = "Weekly MACD(60,130,45) = " & Format(lstMacd.Last, "0.00") & "   MACD - Signal = " & Format((lstMacd.Last - lstSignal.Last), "0.00") &
-              "  MACD consecutive days rising/falling = " & Format(days_rising_or_falling, "0")
+              "  MACD consecutive days rising/falling = " & Format(days_rising_or_falling, "0") & "  Histogram consecutive days rising/falling = " & Format(days_rising_or_falling1, "0")
         End If
 
         ' Dim lstHistogram As List(Of Double) = lstMacd.Zip(lstSignal, Function(x, y) x - y).ToList

@@ -1,4 +1,5 @@
-﻿' Last modified on 26May22.
+﻿' Modified on 1Jun22 to make a few minor changes that did not affect the operation; delete unneccessary lines, etc.
+' Last modified on 1Jun22
 
 Option Strict Off
 Option Explicit On
