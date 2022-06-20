@@ -94,6 +94,7 @@ Public Class Form1
   End Sub
   Sub SetControlSizes()
     Dim vertical_location%
+    Panel1.AutoScrollPosition = New Point(0, 0)
     Panel1.Location = New Point(Me.Height / 50, Me.Height / 12)
     Panel1.Height = Me.Height * 85 / 100
     Panel1.Width = Me.Width * 96 / 100
@@ -159,7 +160,7 @@ Public Class Form1
     max_num_points = num_for_chart + 720 'add some points so that errors have time to die out
 
     Dim quotes As IEnumerable(Of Skender.Stock.Indicators.Quote)
-    quotes = GetQuotes(max_num_points, ticker, data_source)
+    quotes = GetQuotes(max_num_points, ticker, data_source).Validate()
     num_from_db = quotes.Count
 
     If num_from_db <= 0 Then
@@ -280,7 +281,7 @@ Public Class Form1
         Dim s2$, gain#
         s2 = "% of Keltner range = " & Format(perc, "0.00") & "   Consecutive days rising/falling = " & Format(days_rising_or_falling, "0")
         If chart_desc.StartsWith("Candlestick") Then
-          gain = 0
+          gain = 0.0
           If lstClose.First > 0.0001 Then
             gain = 100.0 * (lstClose.Last - lstClose.First) / lstClose.First
             s2 = s2 & "   Gain/loss % over this time period = " & Format(gain, "0.00")
@@ -549,7 +550,7 @@ Public Class Form1
 
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
-        .ChartAreas(0).AxisY.Interval = 25.0
+        .ChartAreas(0).AxisY.Interval = 20.0
         title1.Text = "RSI(14) = " & Format(lstRsi.Last, "0.00")
         Dim newSeries0 As New Series()
         .Series.Add(newSeries0)
@@ -680,7 +681,7 @@ Public Class Form1
 
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
-        .ChartAreas(0).AxisY.Interval = 25.0
+        .ChartAreas(0).AxisY.Interval = 20.0
         title1.Text = "MFI(14) = " & Format(lstMfi.Last, "0.00")
         Dim newSeries0 As New Series()
         .Series.Add(newSeries0)
@@ -705,7 +706,7 @@ Public Class Form1
 
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
-        .ChartAreas(0).AxisY.Interval = 25.0
+        .ChartAreas(0).AxisY.Interval = 20.0
         title1.Text = "Stochastic RSI(14) = " & Format(lstStochRsi.Last, "0.00") & "   Signal = " & Format(lstSignal.Last, "0.00") &
         "  where Signal is SMA(3) of Stochastic RSI"
         Dim newSeries0 As New Series()

@@ -1,5 +1,8 @@
 ﻿' Modified on 1Jun22 to make a few minor changes that did not affect the operation; delete unneccessary lines, etc.
-' Last modified on 1Jun22
+' Modified on 19Jun22 to check the quotes using quotes.Validate()
+' Modifed on 20Jun22 to add "Panel1.AutoScrollPosition = New Point(0, 0)" at the begining of SetControlSizes. This
+' keeps the chart controls at the top of the panel if the panel is scrolled downward when the form is resized.
+' Last modified on 20Jun22
 
 Option Strict Off
 Option Explicit On
