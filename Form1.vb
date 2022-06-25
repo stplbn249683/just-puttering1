@@ -168,9 +168,12 @@ Public Class Form1
       Exit Function
     End If
 
-    If num_from_db <= 10 Or num_for_chart > num_from_db Then
-      MessageBox.Show(" Not enough points For calculations")
+    If num_from_db <= 25 Then
+      MessageBox.Show(" Not enough points for calculations")
       Exit Function
+    ElseIf num_for_chart > num_from_db Then
+      num_for_chart = num_from_db
+      MessageBox.Show(" reducing points for calculations -- may reduce accuracy or date range")
     End If
 
     Panel1.Controls.Clear()
@@ -732,6 +735,42 @@ Public Class Form1
           '.LegendText = "Signal"
           .Color = Color.Red
         End With
+      ElseIf chart_desc.StartsWith("RMI(20,5)") Then
+        chart_size = "small"
+        Dim lstDate As New List(Of Date)
+        Dim lstRmi, lstSignal As New List(Of Double)
+        error1 = FindRmi(quotes, 20, 5, 9, lstDate, lstRmi, lstSignal)
+        If error1 < 0 Then Exit Function
+        error1 = ResizeLists(num_for_chart, lstDate, lstRmi, lstSignal)
+        If error1 < 0 Then Exit Function
+
+        .ChartAreas(0).AxisY.Maximum = 100.0
+        .ChartAreas(0).AxisY.Minimum = 0.0
+        .ChartAreas(0).AxisY.Interval = 20.0
+        title1.Text = "RMI(20,5) = " & Format(lstRmi.Last, "0.00") & "  Signal line is EMA(9) of RMI = " & Format(lstSignal.Last, "0.00")
+
+        Dim newSeries0 As New Series()
+        .Series.Add(newSeries0)
+        With newSeries0
+          .ChartType = SeriesChartType.Line
+          .XValueType = ChartValueType.DateTime
+          .IsXValueIndexed = True
+          .Points.DataBindXY(lstDate, lstRmi)
+          .IsVisibleInLegend = False
+          '.LegendText = "RMI(20,5)"
+          .Color = Color.Green
+        End With
+
+        Dim newSeries1 As New Series()
+        .Series.Add(newSeries1)
+        With newSeries1
+          .ChartType = SeriesChartType.Line
+          .XValueType = ChartValueType.DateTime
+          .IsXValueIndexed = True
+          .Points.DataBindXY(lstDate, lstSignal)
+          .IsVisibleInLegend = False
+          .Color = Color.Red
+        End With
       End If
       new_chart.Update()
     End With
@@ -769,6 +808,10 @@ Public Class Form1
         tt.Hide(charts(i))
       End If
     End If
+  End Sub
+
+  Private Sub Panel1_Paint(sender As Object, e As PaintEventArgs) Handles Panel1.Paint
+
   End Sub
 
   Function ChartAreaClientRectangle(chart As Chart, ca As ChartArea) As RectangleF

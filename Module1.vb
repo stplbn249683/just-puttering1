@@ -2,7 +2,9 @@
 ' Modified on 19Jun22 to check the quotes using quotes.Validate()
 ' Modifed on 20Jun22 to add "Panel1.AutoScrollPosition = New Point(0, 0)" at the begining of SetControlSizes. This
 ' keeps the chart controls at the top of the panel if the panel is scrolled downward when the form is resized.
-' Last modified on 20Jun22
+' Modified on 25Jun22 to add a chart of the RMI. I used my own routine to calculate it since I could not find
+' it in the Skender indicators.
+' Last modified on 25Jun22
 
 Option Strict Off
 Option Explicit On
@@ -154,6 +156,18 @@ Module Module1
                     Where x1 IsNot Nothing
                     Select CDbl(x1)).ToList
   End Sub
+  Sub GetEmaLists(result As IEnumerable(Of EmaResult), ByRef lstDate As List(Of Date), ByRef lstEma As List(Of Double))
+    lstDate = (From x In result
+               Select date_value = x.[Date], x1 = x.Ema
+               Where x1 IsNot Nothing
+               Select CDate(date_value)).ToList
+
+    lstEma = (From x In result
+              Select x1 = x.Ema
+              Where x1 IsNot Nothing
+              Select CDbl(x1)).ToList
+  End Sub
+
   Sub GetSmaLists(result As IEnumerable(Of SmaResult), ByRef lstDate As List(Of Date), ByRef lstSma As List(Of Double))
     lstDate = (From x In result
                Select date_value = x.[Date], x1 = x.Sma
@@ -365,7 +379,84 @@ Module Module1
       .num_check_box_indices = 0
     End With
   End Sub
+  Function FindRmi%(quotes As IEnumerable(Of Quote), n%, m%, ns%, ByRef lstDate As List(Of Date), ByRef lstRmi As List(Of Double), ByRef lstSignal As List(Of Double))
+    ' n%...the number of periods used for the smoothing
+    ' m%...the interval (expressed as number of periods) used to find the change in price
+    ' ns%...the number of periods used for the EMA signal line calculation
 
+    FindRmi = -1
+    Dim i%, L%
+    Dim up#(), down#(), rmi#(), diff#
+
+    Dim lstDate1 As New List(Of Date)
+    Dim lstClose As New List(Of Double)
+    Call GetQuoteCloseLists(quotes, lstDate1, lstClose)
+    Dim x As Array = lstClose.ToArray
+    L = x.Length
+    If L < 2 * n + m Then
+      MessageBox.Show("FindRmi --- Not enough points")
+      Exit Function
+    End If
+
+    ReDim up#(0 To L - m - 1), down#(0 To L - m - 1)
+    For i = m To L - 1
+      up(i - m) = 0#
+      down(i - m) = 0#
+      diff = x(i) - x(i - m)
+      If diff > 0 Then
+        up(i - m) = diff
+      ElseIf (diff < 0) Then
+        down(i - m) = Math.Abs(diff)
+      End If
+    Next
+    ' initialize with the SMA
+    Dim sma_up#, sma_down#, smooth_up#, smooth_down#, dN#, multiplier#, dNs#, sma#, ema#
+    sma_up = 0#
+    sma_down = 0#
+
+    dN = CDbl(n)
+    For i = 0 To n - 1
+      sma_up = sma_up + up(i)
+      sma_down = sma_down + down(i)
+    Next
+    smooth_up = sma_up / dN
+    smooth_down = sma_down / dN
+
+    ' continue with the smooth
+
+
+    ReDim rmi#(0 To L - m - n - 1)
+    multiplier = 1.0# / dN
+    For i = n + m To L - 1
+      smooth_up = up(i - m) * multiplier + (1.0# - multiplier) * smooth_up
+      smooth_down = down(i - m) * multiplier + (1.0# - multiplier) * smooth_down
+      If smooth_up + smooth_down <= 0.0000000001 Then
+        rmi(i - n - m) = 50.0#
+      Else
+        rmi(i - n - m) = 100.0# - 100.0# * smooth_down / (smooth_down + smooth_up)
+      End If
+    Next
+
+    'signal line
+    dNs = CDbl(ns)
+    sma = 0.0
+    For i = 0 To ns - 1
+      sma = sma + rmi(i)
+    Next
+    ema = sma / dNs
+
+    lstDate.Clear()
+    lstRmi.Clear()
+    lstSignal.Clear()
+    multiplier = 2.0# / (dNs + 1.0)
+    For i = n + ns + m To L - 1
+      ema = rmi(i - n - m) * multiplier + (1.0# - multiplier) * ema
+      lstDate.Add(lstDate1.ElementAt(i))
+      lstRmi.Add(rmi(i - n - m))
+      lstSignal.Add(ema)
+    Next
+    FindRmi = 0
+  End Function
   Function ReadDefaults(ByVal sFileName$)
     ReadDefaults = 0
     If (Dir(sFileName$) = "") Then Exit Function
