@@ -22,11 +22,12 @@ own use, I did not attempt to make it elegant or efficient.
 There is of course no limit to the features that could be added to a program
 like this.  The user enters the ticker symbol (which must have data in the 
 database table) and the number of days to chart (ending at the most recent
-date). I have used a list of check boxes to select what charts to plot.
-Since the panel containing the charts scrolls, I normally just check
-all of the check boxes. However, there is an error if the Chaikin money flow
-chart is selected when all of the volumes are zero and some other charts are 
-meaningless if all of the volumes are zero.
+date). I have also added the option for the user to enter a starting and 
+ending date instead of the number of days. I have used a list of check boxes
+to select what charts to plot.  Since the panel containing the charts scrolls,
+I normally just check all of the check boxes. However, there is an error if
+the Chaikin money flow chart is selected when all of the volumes are zero and
+some other charts are meaningless if all of the volumes are zero.
 
 The data souce is read in from the text file named "DataSource.ini" located
 in the application directory.  The data source could also be specified

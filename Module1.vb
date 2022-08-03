@@ -4,7 +4,9 @@
 ' keeps the chart controls at the top of the panel if the panel is scrolled downward when the form is resized.
 ' Modified on 25Jun22 to add a chart of the RMI. I used my own routine to calculate it since I could not find
 ' it in the Skender indicators.
-' Last modified on 25Jun22
+' Modified on 27Jun22 to remove some unnecessary lines.
+' Modified on 3Aug22 to allow the user to select the dates using the start and end date instead of the number of days.
+' Last modified on 3Aug22
 
 Option Strict Off
 Option Explicit On
@@ -15,9 +17,12 @@ Imports Skender.Stock.Indicators
 Structure INPUTTYPE
   Dim data_source$
   Dim ticker$
-  Dim num_for_chart$
+  Dim num_of_days$
   Dim num_check_box_indices%
   Dim check_box_indices%()
+  Dim dates_selected_using%
+  Dim start_date$
+  Dim end_date$
 End Structure
 
 Module Module1
@@ -265,6 +270,51 @@ Module Module1
                  Where x1 IsNot Nothing
                  Select CDbl(x1)).ToList
   End Sub
+  Function GetCounts%(ticker$, data_source$, start_date As Date, end_date As Date, ByRef count1%, ByRef count2%)
+    GetCounts = -1
+    count1 = 0
+    count2 = 0
+    Dim date1$ = start_date.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)
+    Dim date2$ = end_date.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)
+    Dim market_price_db$ = "Data Source=" & data_source & ";Initial Catalog=market_data;Integrated Security=True;"
+    Dim cn As New SqlConnection() ' Don't put this statement in a try block; it throws an exception!!!
+
+    cn.ConnectionString = market_price_db
+    cn.Open()
+    Dim cmd As New SqlCommand, dr As SqlDataReader
+    cmd.Connection = cn
+
+    Try
+      cmd.CommandText = "Select COUNT(Date) As c1 From dbo.market_price Where (Ticker = '" & ticker & "') And (Date < " & date1 & ")"
+      dr = cmd.ExecuteReader
+      If dr.HasRows Then
+        dr.Read()
+        count1 = CInt(dr("c1"))
+        dr.Close()
+      End If
+    Catch e As Exception
+      cmd.Dispose()
+      cn.Close()
+      MessageBox.Show(e.Message)
+      Exit Function
+    End Try
+
+    Try
+      cmd.CommandText = "Select COUNT(Date) As c2 From dbo.market_price Where (Ticker = '" & ticker & "') And (Date <= " & date2 & ")"
+      dr = cmd.ExecuteReader
+      If dr.HasRows Then
+        dr.Read()
+        count2 = CInt(dr("c2"))
+        dr.Close()
+      End If
+    Catch e As Exception
+      cmd.Dispose()
+      cn.Close()
+      MessageBox.Show(e.Message)
+      Exit Function
+    End Try
+    GetCounts = 0
+  End Function
   Function GetQuotes(max_num_points%, ticker$, data_source$) As List(Of Skender.Stock.Indicators.Quote)
     Dim query1$
     Dim market_price_db$ = "Data Source=" & data_source & ";Initial Catalog=market_data;Integrated Security=True;"
@@ -299,19 +349,61 @@ Module Module1
     End Try
     GetQuotes = quotes
   End Function
+  Function GetQuotesForRange(row1%, row2%, ticker$, data_source$) As List(Of Skender.Stock.Indicators.Quote)
+    Dim query1$
+    Dim market_price_db$ = "Data Source=" & data_source & ";Initial Catalog=market_data;Integrated Security=True;"
+    Dim cn As New SqlConnection() ' Don't put this statement in a try block; it throws an exception!!!
+
+    Dim quotes As New List(Of Skender.Stock.Indicators.Quote)
+    quotes.Clear()
+    GetQuotesForRange = quotes
+    cn.ConnectionString = market_price_db
+    query1 = "Select * from(Select ROW_NUMBER() OVER (order by Date ASC) as 'row_num',* From dbo.market_price Where (Ticker ='" & ticker & "')) as tbl " &
+    "Where tbl.row_num >= " & row1.ToString & " and tbl.row_num <= " & row2.ToString
+    Try
+      Dim sda As New SqlDataAdapter(query1, cn)
+      Dim dt As DataTable = New DataTable
+      sda.Fill(dt)
+      If dt.Rows.Count > 0 Then
+        quotes = (From x In dt.AsEnumerable()
+                  Select date1 = x.Field(Of Int32)("Date"), high1 = x.Field(Of Decimal)("High"), low1 = x.Field(Of Decimal)("Low"),
+                    open1 = x.Field(Of Decimal)("Open"), close1 = x.Field(Of Decimal)("Close"), volume1 = x.Field(Of Long)("Volume")
+                  Select New Skender.Stock.Indicators.Quote With {
+                  .[Date] = ConvertDate(date1),
+                  .High = CDbl(high1),
+                  .Low = CDbl(low1),
+                  .Open = CDbl(open1),
+                  .Close = CDbl(close1),
+                  .Volume = CDbl(volume1)}
+                 ).ToList
+      End If
+    Catch e As Exception
+      MessageBox.Show(e.Message)
+      Exit Function
+    End Try
+    GetQuotesForRange = quotes
+  End Function
 
   Function ConvertDate$(date1&)
-    Dim year1$, month1$, day1$
-    ConvertDate = ""
-    If Len(date1) = 8 Then
-      year1 = Mid$(date1, 1, 4)
-      month1 = Mid$(date1, 5, 2)
-      If Mid$(month1, 1, 1) = "0" Then month1 = Mid$(month1, 2, 1)
-      day1 = Mid$(date1, 7, 2)
-      If Mid$(day1, 1, 1) = "0" Then day1 = Mid$(day1, 2, 1)
-      ConvertDate = month1 & "/" & day1 & "/" & year1
-    End If
+    Dim s1$
+    s1 = date1.ToString.Trim
+    Dim parsedDate = DateTime.ParseExact(s1, "yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture)
+    Dim formattedDate = parsedDate.ToString("M/d/yyyy", System.Globalization.CultureInfo.InvariantCulture)
+    ConvertDate = formattedDate
   End Function
+
+  'Function ConvertDate$(date1&)
+  '  Dim year1$, month1$, day1$
+  '  ConvertDate = ""
+  '  If Len(date1) = 8 Then
+  '    year1 = Mid$(date1, 1, 4)
+  '    month1 = Mid$(date1, 5, 2)
+  '    If Mid$(month1, 1, 1) = "0" Then month1 = Mid$(month1, 2, 1)
+  '    day1 = Mid$(date1, 7, 2)
+  '    If Mid$(day1, 1, 1) = "0" Then day1 = Mid$(day1, 2, 1)
+  '    ConvertDate = month1 & "/" & day1 & "/" & year1
+  '  End If
+  'End Function
   Function GetQuotes1(max_num_points%, ticker$, data_source$) As List(Of Skender.Stock.Indicators.Quote)
     ' This returns the same data as GetQuotes but uses a SqlDataReader instead of a DataTable
     Dim date1&, n%
@@ -329,7 +421,7 @@ Module Module1
 
     ' for the skender calculations, I want the records in ascending order
     Try
-      ' I want the BOTTOM records of the original table; I also want them in ascending orser
+      ' I want the BOTTOM records of the original table; I also want them in ascending order
       cmd.CommandText = "Select * FROM (Select TOP " & Trim$(Str$(max_num_points)) & " * FROM market_price t1 WHERE Ticker='" & ticker & "' ORDER BY t1.Date DESC) t2 ORDER BY t2.Date ASC"
       'cmd.CommandText = "Select Top " & Trim$(Str$(max_num_points)) & " * from market_price where Ticker='" & ticker & "' Order By Date DESC"
       dr = cmd.ExecuteReader
@@ -371,14 +463,7 @@ Module Module1
     End Try
     GetQuotes1 = quotes
   End Function
-  Sub InitializeDefaults()
-    With UserInput
-      .data_source = "your data source name goes here"
-      .ticker = ""
-      .num_for_chart = "0"
-      .num_check_box_indices = 0
-    End With
-  End Sub
+
   Function FindRmi%(quotes As IEnumerable(Of Quote), n%, m%, ns%, ByRef lstDate As List(Of Date), ByRef lstRmi As List(Of Double), ByRef lstSignal As List(Of Double))
     ' n%...the number of periods used for the smoothing
     ' m%...the interval (expressed as number of periods) used to find the change in price
@@ -393,7 +478,7 @@ Module Module1
     Call GetQuoteCloseLists(quotes, lstDate1, lstClose)
     Dim x As Array = lstClose.ToArray
     L = x.Length
-    If L < 2 * n + m Then
+    If L < 2 * n + ns + m Then
       MessageBox.Show("FindRmi --- Not enough points")
       Exit Function
     End If
@@ -409,6 +494,7 @@ Module Module1
         down(i - m) = Math.Abs(diff)
       End If
     Next
+
     ' initialize with the SMA
     Dim sma_up#, sma_down#, smooth_up#, smooth_down#, dN#, multiplier#, dNs#, sma#, ema#
     sma_up = 0#
@@ -423,7 +509,6 @@ Module Module1
     smooth_down = sma_down / dN
 
     ' continue with the smooth
-
 
     ReDim rmi#(0 To L - m - n - 1)
     multiplier = 1.0# / dN
@@ -457,6 +542,17 @@ Module Module1
     Next
     FindRmi = 0
   End Function
+  Sub InitializeDefaults()
+    With UserInput
+      .data_source = "your data source name goes here"
+      .ticker = ""
+      .num_of_days = "0"
+      .num_check_box_indices = 0
+      .dates_selected_using = 0
+      .start_date = ""
+      .end_date = ""
+    End With
+  End Sub
   Function ReadDefaults(ByVal sFileName$)
     ReadDefaults = 0
     If (Dir(sFileName$) = "") Then Exit Function
@@ -478,8 +574,8 @@ Module Module1
           Select Case (Trim$(items(0)))
             Case "ticker"
               .ticker = items(1).Trim
-            Case "num_for_chart"
-              .num_for_chart = items(1).Trim
+            Case "num_of_days"
+              .num_of_days = items(1).Trim
             Case "check_box_indices"
               Dim line_items = line.Split(CType(",", Char()), 2)
               Dim indices = line_items(1).Split(",")
@@ -488,6 +584,12 @@ Module Module1
               For i = 0 To .num_check_box_indices - 1
                 .check_box_indices(i) = CInt(indices(i))
               Next
+            Case "dates_selected_using"
+              .dates_selected_using = CInt(items(1).Trim)
+            Case "start_date"
+              .start_date = items(1).Trim
+            Case "end_date"
+              .end_date = items(1).Trim
           End Select
         End While
       End With
@@ -538,7 +640,7 @@ Module Module1
       Dim writer1 As New StreamWriter(sFileName)
       With UserInput
         writer1.WriteLine("ticker," & .ticker.Trim)
-        writer1.WriteLine("num_for_chart," & .num_for_chart.Trim)
+        writer1.WriteLine("num_of_days," & .num_of_days.Trim)
         If .num_check_box_indices > 0 Then
           Dim s$, i%
           s = "check_box_indices"
@@ -547,6 +649,9 @@ Module Module1
           Next
           writer1.WriteLine(s)
         End If
+        writer1.WriteLine("dates_selected_using," & .dates_selected_using.ToString.Trim)
+        writer1.WriteLine("start_date," & .start_date.Trim)
+        writer1.WriteLine("end_date," & .end_date.Trim)
       End With
       writer1.Close()
     Catch e As Exception

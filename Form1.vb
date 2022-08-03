@@ -15,13 +15,52 @@ Public Class Form1
     Dim error1%
     updated_successfully = False
     Panel1.Controls.Clear()
+    Panel1.Hide()
     num_charts = 0
     Me.Cursor = Cursors.WaitCursor
-    Dim ticker$, num_for_chart%
+    Dim ticker$, num_of_days%, dates_selected_using%
+    Dim start_date, end_date As Date
+    Dim count1%, count2%
+
     ticker = txtTicker.Text
-    num_for_chart = CInt(txtNumPoints.Text)
+    If rbNumOfDays.Checked Then
+      dates_selected_using = 0
+      num_of_days = CInt(txtNumPoints.Text)
+      If num_of_days < 2 Then
+        Me.Cursor = Cursors.Default
+        Exit Sub
+      End If
+    Else
+      dates_selected_using = 1
+      If IsDate(txtStartDate.Text) = False Then
+        MessageBox.Show("Invalid Start Date")
+        Me.Cursor = Cursors.Default
+        Exit Sub
+      End If
+      If IsDate(txtEndDate.Text) = False Then
+        MessageBox.Show("Invalid End Date")
+        Me.Cursor = Cursors.Default
+        Exit Sub
+      End If
+
+      start_date = CDate(txtStartDate.Text)
+      end_date = CDate(txtEndDate.Text)
+      If end_date <= start_date Then
+        MessageBox.Show("Invalid Date Range")
+        Me.Cursor = Cursors.Default
+        Exit Sub
+      End If
+
+      error1 = GetCounts(ticker, UserInput.data_source, start_date, end_date, count1, count2)
+      If error1 < 0 Or count2 - count1 < 2 Then
+        MessageBox.Show("Error getting data for ticker symbol " & ticker)
+        Me.Cursor = Cursors.Default
+        Exit Sub
+      End If
+    End If
+
     num_charts = clbChart.CheckedItems.Count
-    If num_charts <= 0 Or num_for_chart < 2 Then
+    If num_charts <= 0 Then
       Me.Cursor = Cursors.Default
       Exit Sub
     End If
@@ -35,42 +74,48 @@ Public Class Form1
     For i = 0 To num_charts - 1
       chart_desc(i) = clbChart.CheckedItems.Item(i).ToString
     Next
-    error1 = UpdateChart(ticker, num_for_chart, UserInput.data_source, num_charts, chart_desc)
+    error1 = UpdateChart(ticker, dates_selected_using, num_of_days, count1, count2, UserInput.data_source, num_charts, chart_desc)
     Me.Cursor = Cursors.Default
     If error1 < 0 Then Exit Sub
     updated_successfully = True ' Do this last so that the Chart_MouseMove event handler is not using invalid data
     Panel1.Show()
 
     UserInput.ticker = ticker
-    UserInput.num_for_chart = num_for_chart
     UserInput.num_check_box_indices = num_charts
     ReDim UserInput.check_box_indices(0 To num_charts - 1)
     For i = 0 To num_charts - 1
       UserInput.check_box_indices(i) = clbChart.CheckedIndices.Item(i)
     Next
+    UserInput.dates_selected_using = dates_selected_using
+    If dates_selected_using = 0 Then
+      UserInput.num_of_days = num_of_days
+    Else
+      UserInput.start_date = start_date.ToShortDateString
+      UserInput.end_date = end_date.ToShortDateString
+    End If
 
-    Dim CurrentDir$, sFileName$
-    CurrentDir$ = Application.StartupPath
-    sFileName = CurrentDir$ & "\StockChart.ini"
+    Dim AppPath$, sFileName$
+    AppPath$ = Application.StartupPath
+    sFileName = AppPath$ & "\StockChart.ini"
     error1 = SaveDefaults(sFileName)
     If error1 < 0 Then MessageBox.Show("Error saving file " & sFileName)
   End Sub
 
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
-    Dim CurrentDir$, error1%, sFileName$
+    Dim AppPath$, error1%, sFileName$
     updated_successfully = False
     num_charts = 0
     InitializeDefaults()
-    CurrentDir$ = Application.StartupPath
-    sFileName = CurrentDir$ & "\DataSource.ini"
+    AppPath$ = Application.StartupPath
+    sFileName = AppPath$ & "\DataSource.ini"
     error1 = ReadDataSource(sFileName)
     If error1 < 0 Then MessageBox.Show("Error reading file " & sFileName)
-    sFileName = CurrentDir$ & "\StockChart.ini"
+    sFileName = AppPath$ & "\StockChart.ini"
     error1 = ReadDefaults(sFileName)
     If error1 < 0 Then MessageBox.Show("Error reading file " & sFileName)
     With UserInput
       txtTicker.Text = .ticker
-      txtNumPoints.Text = .num_for_chart
+      txtNumPoints.Text = .num_of_days
       If .num_check_box_indices > 0 Then
         For i = 0 To .num_check_box_indices - 1
           If .check_box_indices(i) <= clbChart.Items.Count - 1 Then
@@ -78,7 +123,30 @@ Public Class Form1
           End If
         Next
       End If
+      If .dates_selected_using <= 0 Then
+        rbNumOfDays.Checked = True
+      Else
+        rbDateRange.Checked = True
+      End If
+      txtStartDate.Text = .start_date
+      txtEndDate.Text = .end_date
     End With
+
+    lblNumPoints.Visible = False
+    txtNumPoints.Visible = False
+    lblStartDate.Visible = False
+    txtStartDate.Visible = False
+    lblEndDate.Visible = False
+    txtEndDate.Visible = False
+    If rbNumOfDays.Checked = True Then
+      lblNumPoints.Visible = True
+      txtNumPoints.Visible = True
+    Else
+      lblStartDate.Visible = True
+      txtStartDate.Visible = True
+      lblEndDate.Visible = True
+      txtEndDate.Visible = True
+    End If
 
     Dim screenHeight As Integer = My.Computer.Screen.WorkingArea.Height
     Dim screenWidth As Integer = My.Computer.Screen.WorkingArea.Width
@@ -95,8 +163,10 @@ Public Class Form1
   Sub SetControlSizes()
     Dim vertical_location%
     Panel1.AutoScrollPosition = New Point(0, 0)
-    Panel1.Location = New Point(Me.Height / 50, Me.Height / 12)
-    Panel1.Height = Me.Height * 85 / 100
+    Panel1.Location = New Point(Me.Height / 50, clbChart.Location.Y + clbChart.Size.Height + 5)
+    Panel1.Height = 94 * Me.Height / 100 - Panel1.Location.Y
+    'Panel1.Location = New Point(Me.Height / 50, Me.Height / 12)
+    'Panel1.Height = Me.Height * 85 / 100
     Panel1.Width = Me.Width * 96 / 100
 
     Dim i%
@@ -152,15 +222,23 @@ Public Class Form1
       Next
     End If
   End Sub
-  Function UpdateChart%(ticker$, num_for_chart%, data_source$, num_charts%, chart_desc$())
+  Function UpdateChart%(ticker$, dates_selected_using%, num_of_days%, count1%, count2%, data_source$, num_charts%, chart_desc$())
     UpdateChart = -1
-    Dim error1%
-    Dim max_num_points%, i%, num_from_db%
+    Dim error1%, num_for_chart%
+    Dim max_num_points%, i%, num_from_db%, row1%, row2%
+    Dim quotes As IEnumerable(Of Quote)
+    If dates_selected_using = 0 Then
+      num_for_chart = num_of_days
+      max_num_points = num_for_chart + 720 'add some points so that errors have time to die out
+      quotes = GetQuotes(max_num_points, ticker, data_source).Validate()
+    Else
+      num_for_chart = count2 - count1
+      row1 = count1 - 720
+      If row1 < 1 Then row1 = 1
+      row2 = count2
+      quotes = GetQuotesForRange(row1, row2, ticker, data_source).Validate()
+    End If
 
-    max_num_points = num_for_chart + 720 'add some points so that errors have time to die out
-
-    Dim quotes As IEnumerable(Of Skender.Stock.Indicators.Quote)
-    quotes = GetQuotes(max_num_points, ticker, data_source).Validate()
     num_from_db = quotes.Count
 
     If num_from_db <= 0 Then
@@ -189,9 +267,9 @@ Public Class Form1
         Exit Function
       End If
       chart_sizes(i) = chart_size
-      Next
+    Next
 
-      SetControlSizes()
+    SetControlSizes()
     UpdateChart = 0
   End Function
 
@@ -209,7 +287,7 @@ Public Class Form1
       .Cursor = Cursors.Cross
       .ChartAreas(0).CursorX.IsUserEnabled = True
       .ChartAreas(0).CursorY.IsUserEnabled = True
-      .ChartAreas(0).AxisX.LabelStyle.Format = "MM/dd/yyyy"
+      .ChartAreas(0).AxisX.LabelStyle.Format = "M/d/yyyy"
       '.ChartAreas(0).AxisX.Interval = 1
       '.ChartAreas(0).AxisX.IntervalType = DateTimeIntervalType.Months
       '.ChartAreas(0).AxisX.IntervalOffset = 1
@@ -228,18 +306,16 @@ Public Class Form1
         chart_size = "large"
         Dim lstDate As New List(Of Date)
         Dim lstHigh, lstLow, lstOpen, lstClose As New List(Of Double)
-        Dim heikin_ashi_result As IEnumerable(Of HeikinAshiResult)
 
 
         If chart_desc.StartsWith("Candlestick") Then
           Call GetQuoteLists(quotes, lstDate, lstHigh, lstLow, lstOpen, lstClose)
         Else
-          heikin_ashi_result = quotes.GetHeikinAshi()
+          Dim heikin_ashi_result = quotes.GetHeikinAshi()
           Call GetHeikinAshiLists(heikin_ashi_result, lstDate, lstHigh, lstLow, lstOpen, lstClose)
         End If
 
-        Dim keltner_result As IEnumerable(Of KeltnerResult)
-        keltner_result = quotes.GetKeltner(20, 2, 10)
+        Dim keltner_result = quotes.GetKeltner(20, 2, 10)
         Dim lstCenterLine, lstUpperBand, lstLowerBand As New List(Of Double)
         lstDate.Clear()
         Call GetKeltnerLists(keltner_result, lstDate, lstCenterLine, lstUpperBand, lstLowerBand)
@@ -332,15 +408,13 @@ Public Class Form1
 
         Dim lstSma, lstCenterLine, lstUpperBand, lstLowerBand As New List(Of Double)
         If chart_desc.StartsWith("Bollinger") Then
-          Dim bollinger_result As IEnumerable(Of BollingerBandsResult)
-          bollinger_result = quotes.GetBollingerBands(20, 2)
+          Dim bollinger_result = quotes.GetBollingerBands(20, 2)
           lstDate.Clear()
           Call GetBollingerLists(bollinger_result, lstDate, lstSma, lstUpperBand, lstLowerBand)
           error1 = ResizeLists(num_for_chart, lstDate, lstClose, lstSma, lstUpperBand, lstLowerBand)
           If error1 < 0 Then Exit Function
         Else
-          Dim donchian_result As IEnumerable(Of DonchianResult)
-          donchian_result = quotes.GetDonchian(20)
+          Dim donchian_result = quotes.GetDonchian(20)
           lstDate.Clear()
           Call GetDonchianLists(donchian_result, lstDate, lstCenterLine, lstUpperBand, lstLowerBand)
           error1 = ResizeLists(num_for_chart, lstDate, lstClose, lstCenterLine, lstUpperBand, lstLowerBand)
@@ -453,9 +527,8 @@ Public Class Form1
         lstSma.Clear()
         Call GetSmaLists(sma_result, lstDate, lstSma)
         error1 = ResizeLists(num_for_chart, lstDate, lstSma)
-        If error1 < 0 Then Exit Function
 
-        If lstDate.Count = num_aligned_points Then
+        If error1 >= 0 And lstDate.Count = num_aligned_points Then
           Dim sma50#
           sma50 = lstSma.Last
 
@@ -477,9 +550,8 @@ Public Class Form1
         lstSma.Clear()
         Call GetSmaLists(sma_result, lstDate, lstSma)
         error1 = ResizeLists(num_for_chart, lstDate, lstSma)
-        If error1 < 0 Then Exit Function
 
-        If lstDate.Count = num_aligned_points Then
+        If error1 >= 0 And lstDate.Count = num_aligned_points Then
           Dim sma100#
           sma100 = lstSma.Last
 
@@ -501,9 +573,8 @@ Public Class Form1
         lstSma.Clear()
         Call GetSmaLists(sma_result, lstDate, lstSma)
         error1 = ResizeLists(num_for_chart, lstDate, lstSma)
-        If error1 < 0 Then Exit Function
 
-        If lstDate.Count = num_aligned_points Then
+        If error1 >= 0 And lstDate.Count = num_aligned_points Then
           Dim sma200#
           sma200 = lstSma.Last
 
@@ -544,8 +615,7 @@ Public Class Form1
       ElseIf chart_desc.StartsWith("RSI(14)") Then
         chart_size = "small"
         Dim lstDate As New List(Of Date)
-        Dim rsi_result As IEnumerable(Of RsiResult)
-        rsi_result = quotes.GetRsi(14)
+        Dim rsi_result = quotes.GetRsi(14)
         Dim lstRsi As New List(Of Double)
         Call GetRsiLists(rsi_result, lstDate, lstRsi)
         error1 = ResizeLists(num_for_chart, lstDate, lstRsi)
@@ -630,8 +700,7 @@ Public Class Form1
       ElseIf chart_desc.StartsWith("OBV") Then
         chart_size = "small"
         Dim lstDate As New List(Of Date)
-        Dim obv_result As IEnumerable(Of ObvResult)
-        obv_result = quotes.GetObv()
+        Dim obv_result = quotes.GetObv()
         Dim lstObv As New List(Of Double)
         Call GetObvLists(obv_result, lstDate, lstObv)
         error1 = ResizeLists(num_for_chart, lstDate, lstObv)
@@ -653,8 +722,7 @@ Public Class Form1
       ElseIf chart_desc.StartsWith("CMF(20)") Then
         chart_size = "small"
         Dim lstDate As New List(Of Date)
-        Dim cmf_result As IEnumerable(Of CmfResult)
-        cmf_result = quotes.GetCmf(20)
+        Dim cmf_result = quotes.GetCmf(20)
         Dim lstCmf As New List(Of Double)
         Call GetCmfLists(cmf_result, lstDate, lstCmf)
         error1 = ResizeLists(num_for_chart, lstDate, lstCmf)
@@ -675,8 +743,7 @@ Public Class Form1
       ElseIf chart_desc.StartsWith("MFI(14)") Then
         chart_size = "small"
         Dim lstDate As New List(Of Date)
-        Dim mfi_result As IEnumerable(Of MfiResult)
-        mfi_result = quotes.GetMfi(14)
+        Dim mfi_result = quotes.GetMfi(14)
         Dim lstMfi As New List(Of Double)
         Call GetMfiLists(mfi_result, lstDate, lstMfi)
         error1 = ResizeLists(num_for_chart, lstDate, lstMfi)
@@ -812,6 +879,42 @@ Public Class Form1
 
   Private Sub Panel1_Paint(sender As Object, e As PaintEventArgs) Handles Panel1.Paint
 
+  End Sub
+
+  Private Sub rbNumOfDays_CheckedChanged(sender As Object, e As EventArgs) Handles rbNumOfDays.CheckedChanged
+    If rbNumOfDays.Checked = True Then
+      lblNumPoints.Visible = True
+      txtNumPoints.Visible = True
+      lblStartDate.Visible = False
+      txtStartDate.Visible = False
+      lblEndDate.Visible = False
+      txtEndDate.Visible = False
+    Else
+      lblNumPoints.Visible = False
+      txtNumPoints.Visible = False
+      lblStartDate.Visible = True
+      txtStartDate.Visible = True
+      lblEndDate.Visible = True
+      txtEndDate.Visible = True
+    End If
+  End Sub
+
+  Private Sub rbDateRange_CheckedChanged(sender As Object, e As EventArgs) Handles rbDateRange.CheckedChanged
+    If rbDateRange.Checked = True Then
+      lblNumPoints.Visible = False
+      txtNumPoints.Visible = False
+      lblStartDate.Visible = True
+      txtStartDate.Visible = True
+      lblEndDate.Visible = True
+      txtEndDate.Visible = True
+    Else
+      lblNumPoints.Visible = True
+      txtNumPoints.Visible = True
+      lblStartDate.Visible = False
+      txtStartDate.Visible = False
+      lblEndDate.Visible = False
+      txtEndDate.Visible = False
+    End If
   End Sub
 
   Function ChartAreaClientRectangle(chart As Chart, ca As ChartArea) As RectangleF
