@@ -51,9 +51,18 @@ that were added to the exchange very recently).
 I have included a few PNG files in the repository showing screen shots of the
 output.  If I find errors in the program or add additional charts then I
 will update the files and change the "Last modified" date at the top of 
-the file Module1.vb.  I have now included the project file since it can be a
-little difficult to get the form to display correctly without it (as I 
-found out when I tried to do it myself).
+the file Module1.vb.
+
+Recent changes (also listed in the comments at the start of Module1) include:
+
+Modified on 3Aug22 to allow the user to select the dates using the start and
+end dates instead of the number of days.
+Modified on 8Sep22 to add a candlestick chart with the parabolic SAR.
+Modified on 10Sep22 so that, if a second ticker symbol is entered after "/",
+then a chart of ticker1/ticker2 is appended to the end of the selected charts
+Ratios are relative to a ratio of 1 at the first day of the time period.
+Modified on 11Sep22 to add event handlers that allow the checked list box to
+expand in size when the mouse is over it.
 
 I would point out something that I ran into myself when using this program.
 If a stock split has occurred in the stock since the historical stock quotes

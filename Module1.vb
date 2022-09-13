@@ -5,8 +5,12 @@
 ' Modified on 25Jun22 to add a chart of the RMI. I used my own routine to calculate it since I could not find
 ' it in the Skender indicators.
 ' Modified on 27Jun22 to remove some unnecessary lines.
-' Modified on 3Aug22 to allow the user to select the dates using the start and end date instead of the number of days.
-' Last modified on 3Aug22
+' Modified on 3Aug22 to allow the user to select the dates using the start and end dates instead of the number of days.
+' Modified on 8Sep22 to add a candlestick chart with the parabolic SAR.
+' Modified on 10Sep22 so that, if a second ticker symbol is entered after "/", then a chart of ticker1/ticker2 is appended
+' to the end of the selected charts. Ratios are relative to a ratio of 1 at the first day of the time period.
+' Modified on 11Sep22 to add event handlers that allow the checked list box to expand in size when the mouse is over it.
+' Last modified on 11Sep22
 
 Option Strict Off
 Option Explicit On
@@ -17,6 +21,7 @@ Imports Skender.Stock.Indicators
 Structure INPUTTYPE
   Dim data_source$
   Dim ticker$
+  Dim ticker2$
   Dim num_of_days$
   Dim num_check_box_indices%
   Dim check_box_indices%()
@@ -269,6 +274,17 @@ Module Module1
                  Select x1 = x.Signal
                  Where x1 IsNot Nothing
                  Select CDbl(x1)).ToList
+  End Sub
+  Sub GetParabolicSarLists(result As IEnumerable(Of ParabolicSarResult), ByRef lstDate As List(Of Date), ByRef lstSar As List(Of Double))
+    lstDate = (From x In result
+               Select date_value = x.[Date], x1 = x.Sar
+               Where x1 IsNot Nothing
+               Select CDate(date_value)).ToList
+
+    lstSar = (From x In result
+              Select x1 = x.Sar
+              Where x1 IsNot Nothing
+              Select CDbl(x1)).ToList
   End Sub
   Function GetCounts%(ticker$, data_source$, start_date As Date, end_date As Date, ByRef count1%, ByRef count2%)
     GetCounts = -1
@@ -546,6 +562,7 @@ Module Module1
     With UserInput
       .data_source = "your data source name goes here"
       .ticker = ""
+      .ticker2 = ""
       .num_of_days = "0"
       .num_check_box_indices = 0
       .dates_selected_using = 0
@@ -574,6 +591,8 @@ Module Module1
           Select Case (Trim$(items(0)))
             Case "ticker"
               .ticker = items(1).Trim
+            Case "ticker2"
+              .ticker2 = items(1).Trim
             Case "num_of_days"
               .num_of_days = items(1).Trim
             Case "check_box_indices"
@@ -640,6 +659,7 @@ Module Module1
       Dim writer1 As New StreamWriter(sFileName)
       With UserInput
         writer1.WriteLine("ticker," & .ticker.Trim)
+        writer1.WriteLine("ticker2," & .ticker2.Trim)
         writer1.WriteLine("num_of_days," & .num_of_days.Trim)
         If .num_check_box_indices > 0 Then
           Dim s$, i%

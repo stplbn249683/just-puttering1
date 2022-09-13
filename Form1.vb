@@ -4,12 +4,14 @@ Imports System.IO
 Imports System.Data.SqlClient
 Imports System.Windows.Forms.DataVisualization.Charting
 Imports Skender.Stock.Indicators
+Imports System.Net.Http.Headers
 
 Public Class Form1
   Public num_charts%, chart_sizes$()
   Public charts() As Chart, updated_successfully As Boolean
   Dim tt As ToolTip = Nothing
   Dim tl As Point = Point.Empty
+  Dim clbChartHt%
 
   Private Sub butUpdate_Click(sender As Object, e As EventArgs) Handles butUpdate.Click
     Dim error1%
@@ -18,11 +20,12 @@ Public Class Form1
     Panel1.Hide()
     num_charts = 0
     Me.Cursor = Cursors.WaitCursor
-    Dim ticker$, num_of_days%, dates_selected_using%
+    Dim ticker$, ticker2$, num_of_days%, dates_selected_using%, num_checked%
     Dim start_date, end_date As Date
-    Dim count1%, count2%
+    Dim count1% = 0, count2% = 0, count1_t2% = 0, count2_t2% = 0
 
-    ticker = txtTicker.Text
+    ticker = txtTicker.Text.Trim
+    ticker2 = txtTicker2.Text.Trim
     If rbNumOfDays.Checked Then
       dates_selected_using = 0
       num_of_days = CInt(txtNumPoints.Text)
@@ -57,9 +60,21 @@ Public Class Form1
         Me.Cursor = Cursors.Default
         Exit Sub
       End If
+
+
+      If ticker2.Length > 0 Then
+        error1 = GetCounts(ticker2, UserInput.data_source, start_date, end_date, count1_t2, count2_t2)
+        If error1 < 0 Or count2_t2 - count1_t2 < 2 Then
+          MessageBox.Show("Error getting data for ticker symbol " & ticker)
+          Me.Cursor = Cursors.Default
+          Exit Sub
+        End If
+      End If
     End If
 
-    num_charts = clbChart.CheckedItems.Count
+    num_checked = clbChart.CheckedItems.Count
+    num_charts = num_checked
+    If ticker2.Length > 0 Then num_charts += 1
     If num_charts <= 0 Then
       Me.Cursor = Cursors.Default
       Exit Sub
@@ -72,18 +87,25 @@ Public Class Form1
     Dim chart_desc$()
     ReDim chart_desc(0 To num_charts - 1)
     For i = 0 To num_charts - 1
-      chart_desc(i) = clbChart.CheckedItems.Item(i).ToString
+      If ticker2.Length > 0 And i = num_charts - 1 Then
+        chart_desc(num_charts - 1) = "ratio " & ticker & "/" & ticker2
+      Else
+        chart_desc(i) = clbChart.CheckedItems.Item(i).ToString
+      End If
     Next
-    error1 = UpdateChart(ticker, dates_selected_using, num_of_days, count1, count2, UserInput.data_source, num_charts, chart_desc)
+
+    error1 = UpdateChart(ticker, ticker2, dates_selected_using, num_of_days, count1, count2, count1_t2, count2_t2,
+      UserInput.data_source, num_charts, chart_desc)
     Me.Cursor = Cursors.Default
     If error1 < 0 Then Exit Sub
     updated_successfully = True ' Do this last so that the Chart_MouseMove event handler is not using invalid data
     Panel1.Show()
 
     UserInput.ticker = ticker
-    UserInput.num_check_box_indices = num_charts
-    ReDim UserInput.check_box_indices(0 To num_charts - 1)
-    For i = 0 To num_charts - 1
+    UserInput.ticker2 = ticker2
+    UserInput.num_check_box_indices = num_checked
+    ReDim UserInput.check_box_indices(0 To num_checked - 1)
+    For i = 0 To num_checked - 1
       UserInput.check_box_indices(i) = clbChart.CheckedIndices.Item(i)
     Next
     UserInput.dates_selected_using = dates_selected_using
@@ -103,6 +125,7 @@ Public Class Form1
 
   Private Sub Form1_Load(sender As Object, e As EventArgs) Handles MyBase.Load
     Dim AppPath$, error1%, sFileName$
+    clbChartHt = clbChart.Height
     updated_successfully = False
     num_charts = 0
     InitializeDefaults()
@@ -115,6 +138,7 @@ Public Class Form1
     If error1 < 0 Then MessageBox.Show("Error reading file " & sFileName)
     With UserInput
       txtTicker.Text = .ticker
+      txtTicker2.Text = .ticker2
       txtNumPoints.Text = .num_of_days
       If .num_check_box_indices > 0 Then
         For i = 0 To .num_check_box_indices - 1
@@ -161,97 +185,141 @@ Public Class Form1
     SetControlSizes()
   End Sub
   Sub SetControlSizes()
-    Dim vertical_location%
+    Dim vertical_location%, panel_chart_ht%, panel_chart_wdth%
     Panel1.AutoScrollPosition = New Point(0, 0)
-    Panel1.Location = New Point(Me.Height / 50, clbChart.Location.Y + clbChart.Size.Height + 5)
-    Panel1.Height = 94 * Me.Height / 100 - Panel1.Location.Y
-    'Panel1.Location = New Point(Me.Height / 50, Me.Height / 12)
+    Panel1.Location = New Point(Me.ClientSize.Width / 100, txtTicker2.Location.Y + txtTicker2.Size.Height + 10)
+    Panel1.Height = 98 * (Me.ClientSize.Height - Panel1.Location.Y) / 100
+    'Panel1.Location = New Point(Me.Width / 50, Me.Height / 12)
     'Panel1.Height = Me.Height * 85 / 100
-    Panel1.Width = Me.Width * 96 / 100
+    Panel1.Width = Me.ClientSize.Width * 98 / 100
 
     Dim i%
+    panel_chart_ht = 100 * Panel1.Height / 100
+    panel_chart_wdth = 98 * Panel1.Width / 100
     If num_charts <= 0 Then Exit Sub
     If num_charts = 1 Then
       If chart_sizes(0) = "large" Then
-        charts(0).Height = Panel1.Height
-        charts(0).Width = Panel1.Width
+        charts(0).Height = panel_chart_ht
+        charts(0).Width = panel_chart_wdth
         charts(0).Location = New Point(0, 0)
       Else
-        charts(0).Height = Panel1.Height * 25 / 100
-        charts(0).Width = Panel1.Width
+        charts(0).Height = panel_chart_ht * 25 / 100
+        charts(0).Width = panel_chart_wdth
         charts(0).Location = New Point(0, 0)
       End If
     ElseIf num_charts = 2 Then
       vertical_location = 0
 
       If chart_sizes(0) = "large" Then
-        charts(0).Height = Panel1.Height * 75 / 100
-        charts(0).Width = Panel1.Width
+        charts(0).Height = panel_chart_ht * 75 / 100
+        charts(0).Width = panel_chart_wdth
         charts(0).Location = New Point(0, vertical_location)
-        If chart_sizes(1) = "large" Then charts(0).Height = Panel1.Height * 50 / 100
+        If chart_sizes(1) = "large" Then charts(0).Height = panel_chart_ht * 50 / 100
       Else
-        charts(0).Height = Panel1.Height * 25 / 100
-        charts(0).Width = Panel1.Width
+        charts(0).Height = panel_chart_ht * 25 / 100
+        charts(0).Width = panel_chart_wdth
         charts(0).Location = New Point(0, vertical_location)
       End If
       vertical_location = vertical_location + charts(0).Height
 
       If chart_sizes(1) = "large" Then
-        charts(1).Height = Panel1.Height * 75 / 100
-        charts(1).Width = Panel1.Width
+        charts(1).Height = panel_chart_ht * 75 / 100
+        charts(1).Width = panel_chart_wdth
         charts(1).Location = New Point(0, vertical_location)
-        If chart_sizes(0) = "large" Then charts(1).Height = Panel1.Height * 50 / 100
+        If chart_sizes(0) = "large" Then charts(1).Height = panel_chart_ht * 50 / 100
       Else
-        charts(1).Height = Panel1.Height * 25 / 100
-        charts(1).Width = Panel1.Width
+        charts(1).Height = panel_chart_ht * 25 / 100
+        charts(1).Width = panel_chart_wdth
         charts(1).Location = New Point(0, vertical_location)
       End If
     Else
       vertical_location = 0
       For i = 0 To num_charts - 1
         If chart_sizes(i) = "large" Then
-          charts(i).Height = Panel1.Height * 50 / 100
-          charts(i).Width = Panel1.Width
+          charts(i).Height = panel_chart_ht * 50 / 100
+          charts(i).Width = panel_chart_wdth
           charts(i).Location = New Point(0, vertical_location)
         Else
-          charts(i).Height = Panel1.Height * 25 / 100
-          charts(i).Width = Panel1.Width
+          charts(i).Height = panel_chart_ht * 25 / 100
+          charts(i).Width = panel_chart_wdth
           charts(i).Location = New Point(0, vertical_location)
         End If
         vertical_location = vertical_location + charts(i).Height
       Next
     End If
   End Sub
-  Function UpdateChart%(ticker$, dates_selected_using%, num_of_days%, count1%, count2%, data_source$, num_charts%, chart_desc$())
+  Function UpdateChart%(ticker$, ticker2$, dates_selected_using%, num_of_days%, count1%, count2%, count1_t2%, count2_t2%,
+    data_source$, num_charts%, chart_desc$())
     UpdateChart = -1
-    Dim error1%, num_for_chart%
-    Dim max_num_points%, i%, num_from_db%, row1%, row2%
+    Dim error1%, i%, row1%, row2%, row1_t2%, row2_t2%
+    Dim num_for_chart%, num_for_chart_t2%, max_num_points%, num_from_db%, num_from_db_t2%
     Dim quotes As IEnumerable(Of Quote)
+    Dim quotes_t2 As IEnumerable(Of Quote)
+    quotes_t2 = Nothing
+
+    num_for_chart_t2 = 0
     If dates_selected_using = 0 Then
       num_for_chart = num_of_days
       max_num_points = num_for_chart + 720 'add some points so that errors have time to die out
       quotes = GetQuotes(max_num_points, ticker, data_source).Validate()
+      If ticker2.Length > 0 Then
+        num_for_chart_t2 = num_of_days
+        max_num_points = num_for_chart_t2 + 720 'add some points so that errors have time to die out
+        quotes_t2 = GetQuotes(max_num_points, ticker2, data_source).Validate()
+      End If
     Else
       num_for_chart = count2 - count1
       row1 = count1 - 720
       If row1 < 1 Then row1 = 1
       row2 = count2
       quotes = GetQuotesForRange(row1, row2, ticker, data_source).Validate()
+      If count2_t2 - count1_t2 > 0 Then
+        num_for_chart_t2 = count2_t2 - count1_t2
+        row1_t2 = count1_t2 - 720
+        If row1_t2 < 1 Then row1_t2 = 1
+        row2_t2 = count2_t2
+        quotes_t2 = GetQuotesForRange(row1_t2, row2_t2, ticker2, data_source).Validate()
+      End If
     End If
 
     num_from_db = quotes.Count
-
     If num_from_db <= 0 Then
-      MessageBox.Show("ticker symbol not In database")
+      MessageBox.Show("ticker symbol " & ticker & " not in database")
       Exit Function
     End If
 
     If num_from_db <= 25 Then
-      MessageBox.Show(" Not enough points for calculations")
+      MessageBox.Show("Not enough points for calculations for ticker symbol " & ticker)
       Exit Function
     ElseIf num_for_chart > num_from_db Then
       num_for_chart = num_from_db
-      MessageBox.Show(" reducing points for calculations -- may reduce accuracy or date range")
+      MessageBox.Show("Reducing points for ticker symbol " & ticker & " -- may reduce accuracy or date range")
+    End If
+
+    If num_for_chart_t2 > 0 Then
+      num_from_db_t2 = quotes_t2.Count
+
+      If num_from_db_t2 <= 0 Then
+        MessageBox.Show("ticker symbol " & ticker2 & " not in database")
+        Exit Function
+      End If
+
+      If quotes.Last.Date <> quotes_t2.Last.Date Then
+        MessageBox.Show("Dates for ticker symbols " & ticker & " and " & ticker2 & " do not match")
+        Exit Function
+      End If
+
+      If num_from_db_t2 <= 25 Then
+        MessageBox.Show("Not enough points for calculations for ticker symbol " & ticker2)
+        Exit Function
+      ElseIf num_for_chart_t2 > num_from_db_t2 Then
+        num_for_chart_t2 = num_from_db_t2
+        MessageBox.Show("Reducing points for ticker symbol " & ticker2 & " -- may reduce accuracy or date range")
+      End If
+
+      If num_for_chart < num_for_chart_t2 Then
+        num_for_chart_t2 = num_for_chart
+      End If
     End If
 
     Panel1.Controls.Clear()
@@ -260,7 +328,7 @@ Public Class Form1
       Dim chart_size$, chart_name$
       chart_size = "large"
       chart_name = "Chart" & i.ToString.Trim
-      error1 = AddChart(chart_name, chart_desc(i), charts(i), num_for_chart, num_from_db, quotes, chart_size)
+      error1 = AddChart(chart_name, chart_desc(i), charts(i), num_for_chart, num_for_chart_t2, quotes, quotes_t2, chart_size)
       If error1 < 0 Then
         Panel1.Controls.Clear()
         MessageBox.Show("Error on chart " & chart_desc(i))
@@ -273,7 +341,8 @@ Public Class Form1
     UpdateChart = 0
   End Function
 
-  Function AddChart%(chart_name$, chart_desc$, new_chart As Chart, num_for_chart%, num_from_db%, quotes As List(Of Skender.Stock.Indicators.Quote), ByRef chart_size$)
+  Function AddChart%(chart_name$, chart_desc$, new_chart As Chart, num_for_chart%, num_for_chart_t2%, quotes As List(Of Skender.Stock.Indicators.Quote),
+    quotes_t2 As List(Of Skender.Stock.Indicators.Quote), ByRef chart_size$)
     AddChart = -1
     Dim error1%, num_aligned_points%
     chart_size = "small"
@@ -315,13 +384,23 @@ Public Class Form1
           Call GetHeikinAshiLists(heikin_ashi_result, lstDate, lstHigh, lstLow, lstOpen, lstClose)
         End If
 
-        Dim keltner_result = quotes.GetKeltner(20, 2, 10)
         Dim lstCenterLine, lstUpperBand, lstLowerBand As New List(Of Double)
-        lstDate.Clear()
-        Call GetKeltnerLists(keltner_result, lstDate, lstCenterLine, lstUpperBand, lstLowerBand)
+        If chart_desc.StartsWith("Candlestick with keltner") Or chart_desc.StartsWith("Heikin-Ashi with keltner") Then
+          Dim keltner_result = quotes.GetKeltner(20, 2, 10)
+          lstDate.Clear()
+          Call GetKeltnerLists(keltner_result, lstDate, lstCenterLine, lstUpperBand, lstLowerBand)
+          error1 = ResizeLists(num_for_chart, lstDate, lstHigh, lstLow, lstOpen, lstClose, lstCenterLine, lstUpperBand, lstLowerBand)
+          If error1 < 0 Then Exit Function
+        End If
 
-        error1 = ResizeLists(num_for_chart, lstDate, lstHigh, lstLow, lstOpen, lstClose, lstCenterLine, lstUpperBand, lstLowerBand)
-        If error1 < 0 Then Exit Function
+        Dim lstSar As New List(Of Double)
+        If chart_desc.StartsWith("Candlestick with parabolic SAR") Then
+          Dim parabolic_sar_result = quotes.GetParabolicSar(0.02, 0.2)
+          lstDate.Clear()
+          GetParabolicSarLists(parabolic_sar_result, lstDate, lstSar)
+          error1 = ResizeLists(num_for_chart, lstDate, lstHigh, lstLow, lstOpen, lstClose, lstSar)
+          If error1 < 0 Then Exit Function
+        End If
 
         Dim newSeries0 As New Series()
         .Series.Add(newSeries0)
@@ -333,7 +412,7 @@ Public Class Form1
           .Points.DataBindXY(lstDate, lstHigh, lstLow, lstOpen, lstClose)
           Dim s1$
           If chart_desc.StartsWith("Candlestick") Then
-            s1 = "Candlstick"
+            s1 = "Candlestick"
             .Color = Color.Green
             .BackSecondaryColor = Color.Red
           Else
@@ -346,10 +425,13 @@ Public Class Form1
 
         Dim perc#, keltner_range#
         perc# = 0#
-        keltner_range = lstUpperBand.Last - lstLowerBand.Last
-        If keltner_range > 0.001 Then
-          perc = 100.0 * (lstClose.Last - lstLowerBand.Last) / keltner_range
+        If chart_desc.StartsWith("Candlestick with keltner") Or chart_desc.StartsWith("Heikin-Ashi with keltner") Then
+          keltner_range = lstUpperBand.Last - lstLowerBand.Last
+          If keltner_range > 0.001 Then
+            perc = 100.0 * (lstClose.Last - lstLowerBand.Last) / keltner_range
+          End If
         End If
+
         Dim days_rising_or_falling%
         If chart_desc.StartsWith("Candlestick") Then
           days_rising_or_falling% = DaysRisingOrFalling(40, lstOpen, lstClose, True)
@@ -358,7 +440,11 @@ Public Class Form1
         End If
 
         Dim s2$, gain#
-        s2 = "% of Keltner range = " & Format(perc, "0.00") & "   Consecutive days rising/falling = " & Format(days_rising_or_falling, "0")
+        s2 = ""
+        If chart_desc.StartsWith("Candlestick with keltner") Or chart_desc.StartsWith("Heikin-Ashi with keltner") Then
+          s2 = s2 & "% of Keltner range = " & Format(perc, "0.00") & "   "
+        End If
+        s2 = s2 & "Consecutive days rising/falling = " & Format(days_rising_or_falling, "0")
         If chart_desc.StartsWith("Candlestick") Then
           gain = 0.0
           If lstClose.First > 0.0001 Then
@@ -366,39 +452,58 @@ Public Class Form1
             s2 = s2 & "   Gain/loss % over this time period = " & Format(gain, "0.00")
           End If
         End If
+
         title1.Text = s2
-        Dim newSeries1 As New Series()
-        .Series.Add(newSeries1)
-        With newSeries1
-          .ChartType = SeriesChartType.Line
-          .XValueType = ChartValueType.DateTime
-          .IsXValueIndexed = True
-          .Points.DataBindXY(lstDate, lstCenterLine)
-          .LegendText = "Keltner center line"
-          .Color = Color.Blue
-        End With
+        If chart_desc.StartsWith("Candlestick with keltner") Or chart_desc.StartsWith("Heikin-Ashi with keltner") Then
+          Dim newSeries1 As New Series()
+          .Series.Add(newSeries1)
+          With newSeries1
+            .ChartType = SeriesChartType.Line
+            .XValueType = ChartValueType.DateTime
+            .IsXValueIndexed = True
+            .Points.DataBindXY(lstDate, lstCenterLine)
+            .LegendText = "Keltner center line"
+            .Color = Color.Blue
+          End With
 
-        Dim newSeries2 As New Series()
-        .Series.Add(newSeries2)
-        With newSeries2
-          .ChartType = SeriesChartType.Line
-          .XValueType = ChartValueType.DateTime
-          .IsXValueIndexed = True
-          .Points.DataBindXY(lstDate, lstUpperBand)
-          .LegendText = "Keltner upper band"
-          .Color = Color.Blue
-        End With
+          Dim newSeries2 As New Series()
+          .Series.Add(newSeries2)
+          With newSeries2
+            .ChartType = SeriesChartType.Line
+            .XValueType = ChartValueType.DateTime
+            .IsXValueIndexed = True
+            .Points.DataBindXY(lstDate, lstUpperBand)
+            .LegendText = "Keltner upper band"
+            .Color = Color.Blue
+          End With
 
-        Dim newSeries3 As New Series()
-        .Series.Add(newSeries3)
-        With newSeries3
-          .ChartType = SeriesChartType.Line
-          .XValueType = ChartValueType.DateTime
-          .IsXValueIndexed = True
-          .Points.DataBindXY(lstDate, lstLowerBand)
-          .LegendText = "Keltner lower band"
-          .Color = Color.Blue
-        End With
+          Dim newSeries3 As New Series()
+          .Series.Add(newSeries3)
+          With newSeries3
+            .ChartType = SeriesChartType.Line
+            .XValueType = ChartValueType.DateTime
+            .IsXValueIndexed = True
+            .Points.DataBindXY(lstDate, lstLowerBand)
+            .LegendText = "Keltner lower band"
+            .Color = Color.Blue
+          End With
+        End If
+
+        If chart_desc.StartsWith("Candlestick with parabolic SAR") Then
+          Dim newSeries1 As New Series()
+          .Series.Add(newSeries1)
+          With newSeries1
+            .BorderDashStyle = ChartDashStyle.Dot
+            .BorderWidth = 2
+            '.BorderColor = Color.Purple
+            .ChartType = SeriesChartType.Point
+            .XValueType = ChartValueType.DateTime
+            .IsXValueIndexed = True
+            .Points.DataBindXY(lstDate, lstSar)
+            .LegendText = "parabolic SAR       "
+            .Color = Color.Purple
+          End With
+        End If
       ElseIf chart_desc.StartsWith("Bollinger") Or chart_desc.StartsWith("20 day Donchian") Then
         Dim s1$ = ""
         chart_size = "large"
@@ -624,6 +729,11 @@ Public Class Form1
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
         .ChartAreas(0).AxisY.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.LineColor = Color.Black
+        .ChartAreas(0).AxisY.MinorGrid.Enabled = True
+        .ChartAreas(0).AxisY.MinorGrid.Interval = 10.0
+        .ChartAreas(0).AxisY.MinorGrid.LineColor = Color.Gainsboro
         title1.Text = "RSI(14) = " & Format(lstRsi.Last, "0.00")
         Dim newSeries0 As New Series()
         .Series.Add(newSeries0)
@@ -752,6 +862,11 @@ Public Class Form1
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
         .ChartAreas(0).AxisY.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.LineColor = Color.Black
+        .ChartAreas(0).AxisY.MinorGrid.Enabled = True
+        .ChartAreas(0).AxisY.MinorGrid.Interval = 10.0
+        .ChartAreas(0).AxisY.MinorGrid.LineColor = Color.Gainsboro
         title1.Text = "MFI(14) = " & Format(lstMfi.Last, "0.00")
         Dim newSeries0 As New Series()
         .Series.Add(newSeries0)
@@ -777,6 +892,12 @@ Public Class Form1
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
         .ChartAreas(0).AxisY.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.LineColor = Color.Black
+        .ChartAreas(0).AxisY.MinorGrid.Enabled = True
+        .ChartAreas(0).AxisY.MinorGrid.Interval = 10.0
+        .ChartAreas(0).AxisY.MinorGrid.LineColor = Color.Gainsboro
+
         title1.Text = "Stochastic RSI(14) = " & Format(lstStochRsi.Last, "0.00") & "   Signal = " & Format(lstSignal.Last, "0.00") &
         "  where Signal is SMA(3) of Stochastic RSI"
         Dim newSeries0 As New Series()
@@ -814,6 +935,11 @@ Public Class Form1
         .ChartAreas(0).AxisY.Maximum = 100.0
         .ChartAreas(0).AxisY.Minimum = 0.0
         .ChartAreas(0).AxisY.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.Interval = 20.0
+        .ChartAreas(0).AxisY.MajorGrid.LineColor = Color.Black
+        .ChartAreas(0).AxisY.MinorGrid.Enabled = True
+        .ChartAreas(0).AxisY.MinorGrid.Interval = 10.0
+        .ChartAreas(0).AxisY.MinorGrid.LineColor = Color.Gainsboro
         title1.Text = "RMI(20,5) = " & Format(lstRmi.Last, "0.00") & "  Signal line is EMA(9) of RMI = " & Format(lstSignal.Last, "0.00")
 
         Dim newSeries0 As New Series()
@@ -838,11 +964,44 @@ Public Class Form1
           .IsVisibleInLegend = False
           .Color = Color.Red
         End With
+      ElseIf chart_desc.StartsWith("ratio") Then
+        chart_size = "small"
+        Dim lstDate As New List(Of Date)
+        Dim lstCloseT1, lstCloseT2 As New List(Of Double)
+        Call GetQuoteCloseLists(quotes, lstDate, lstCloseT1)
+        lstDate.Clear()
+        Call GetQuoteCloseLists(quotes_t2, lstDate, lstCloseT2)
+        error1 = ResizeLists(num_for_chart_t2, lstDate, lstCloseT1, lstCloseT2)
+        If error1 < 0 Then Exit Function
+        Dim bResult = lstCloseT2.Exists(Function(value As Integer)
+                                          Return value <= 0.01
+                                        End Function)
+        If bResult = True Then
+          MessageBox.Show("Error in " & chart_desc & " --- denominator <= 0")
+          Exit Function
+        End If
+
+        Dim scale = lstCloseT2.First / lstCloseT1.First
+        Dim lstRatio As List(Of Double) = lstCloseT1.Zip(lstCloseT2, Function(x, y) scale * x / y).ToList
+
+        title1.Text = chart_desc & " = " & Format(lstRatio.Last, "0.000")
+        Dim newSeries0 As New Series()
+        .Series.Add(newSeries0)
+        With newSeries0
+          .ChartType = SeriesChartType.Line
+          .XValueType = ChartValueType.DateTime
+          .IsXValueIndexed = True
+          .Points.DataBindXY(lstDate, lstRatio)
+          .IsVisibleInLegend = False
+          '.LegendText = chan_desc
+          .Color = Color.Blue
+        End With
       End If
       new_chart.Update()
     End With
     AddChart = 0
   End Function
+
   Private Sub Chart_MouseMove(sender As System.Object, e As MouseEventArgs)
     If updated_successfully = False Then Exit Sub
     Dim s$, i%, j%, index1%
@@ -875,10 +1034,6 @@ Public Class Form1
         tt.Hide(charts(i))
       End If
     End If
-  End Sub
-
-  Private Sub Panel1_Paint(sender As Object, e As PaintEventArgs) Handles Panel1.Paint
-
   End Sub
 
   Private Sub rbNumOfDays_CheckedChanged(sender As Object, e As EventArgs) Handles rbNumOfDays.CheckedChanged
@@ -935,4 +1090,15 @@ Public Class Form1
     InnerPlotPositionClientRectangle = New RectangleF(cac_rect.X + wd * ipp_rect.X, cac_rect.Y + ht * ipp_rect.Y,
                             wd * ipp_rect.Width, ht * ipp_rect.Height)
   End Function
+
+  Private Sub clbChart_GotFocus(sender As Object, e As System.EventArgs) _
+Handles clbChart.GotFocus, clbChart.MouseEnter
+    clbChart.Height = 20 + (16 * clbChart.Items.Count) ' expand the height
+  End Sub
+
+  Private Sub clbChart_LostFocus(sender As Object, e As System.EventArgs) _
+Handles clbChart.LostFocus, clbChart.MouseLeave
+    clbChart.Height = clbChartHt ' set the height back to it's initial size
+    clbChart.SelectedIndex = -1
+  End Sub
 End Class
